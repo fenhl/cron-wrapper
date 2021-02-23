@@ -5,8 +5,14 @@ use {
     std::{
         ffi::OsString,
         fmt,
-        fs,
-        io,
+        fs::{
+            self,
+            File,
+        },
+        io::{
+            self,
+            prelude::*,
+        },
         path::Path,
         process::Command,
     },
@@ -75,7 +81,15 @@ fn main(args: Args) -> Result<(), Error> {
         .prefix(&format!("cronjob-{}", args.name))
         .suffix(".log")
         .tempfile()?;
-    if Command::new(args.cmd).args(args.args).stdout(tmp_file.reopen()?).status()?.success() {
+    let status = match Command::new(args.cmd).args(args.args).stdout(tmp_file.reopen()?).status() {
+        Ok(status) => status,
+        Err(e) => {
+            let mut perm_file = File::create(perm_path)?;
+            writeln!(perm_file, "error calling cronjob:\n{}\n{:?}", e, e)?;
+            return Ok(())
+        }
+    };
+    if status.success() {
         fs::remove_file(perm_path).not_found_ok()?;
     } else {
         fs::rename(tmp_file, perm_path)?;
