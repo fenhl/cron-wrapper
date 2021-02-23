@@ -10,8 +10,13 @@ use {
         path::Path,
         process::Command,
     },
+    bytesize::ByteSize,
     derive_more::From,
     structopt::StructOpt,
+    systemstat::{
+        Platform as _,
+        System,
+    },
 };
 
 #[cfg(target_os = "linux")] const ERRORS_DIR: &str = "/home/fenhl/.local/share/syncbin";
@@ -50,15 +55,26 @@ struct Args {
     cmd: OsString,
     #[structopt(parse(from_os_str))]
     args: Vec<OsString>,
+    #[structopt(long)]
+    no_diskspace_check: bool,
 }
 
 #[wheel::main]
 fn main(args: Args) -> Result<(), Error> {
+    let perm_path = Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", args.name));
+    if !args.no_diskspace_check {
+        //TODO move part of diskspace to a library crate and use that instead
+        let fs = System::new().mount_at("/")?;
+        if fs.avail < ByteSize::gib(5) || (fs.avail.as_u64() as f64 / fs.total.as_u64() as f64) < 0.05
+        || fs.files_avail < 5000 || (fs.files_avail as f64 / fs.files_total as f64) < 0.05 {
+            fs::write(perm_path, b"not enough disk space\n")?;
+            return Ok(())
+        }
+    }
     let tmp_file = tempfile::Builder::new()
         .prefix(&format!("cronjob-{}", args.name))
         .suffix(".log")
         .tempfile()?;
-    let perm_path = Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", args.name));
     if Command::new(args.cmd).args(args.args).stdout(tmp_file.reopen()?).status()?.success() {
         fs::remove_file(perm_path).not_found_ok()?;
     } else {
