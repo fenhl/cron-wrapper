@@ -23,10 +23,8 @@ use {
         Platform as _,
         System,
     },
+    cron_wrapper::ERRORS_DIR,
 };
-
-#[cfg(target_os = "linux")] const ERRORS_DIR: &str = "/home/fenhl/.local/share/syncbin";
-#[cfg(target_os = "macos")] const ERRORS_DIR: &str = "/Users/fenhl/Desktop";
 
 trait IoResultExt {
     fn not_found_ok(self) -> Self;

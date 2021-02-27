@@ -1,13 +1,16 @@
 [package]
-name = "cronjob-wrapper"
+name = "bitbar-cron"
 version = "2.0.0"
 authors = ["Fenhl <fenhl@fenhl.net>"]
 edition = "2018"
 
 [dependencies]
-bytesize = "1"
-systemstat = "0.1.5"
-tempfile = "3"
+bitbar = "0.4"
+itertools = "0.10"
+lazy_static = "1"
+regex = "1"
+serde_json = "1"
+xdg-basedir = "1"
 
 [dependencies.cron-wrapper]
 path = "../cron-wrapper"
@@ -17,10 +20,6 @@ version = "0.99"
 default-features = false
 features = ["from"]
 
-[dependencies.structopt]
-version = "0.3"
-features = ["paw"]
-
-[dependencies.wheel]
-git = "https://github.com/fenhl/wheel"
-branch = "main"
+[dependencies.serde]
+version = "1"
+features = ["derive"]
