@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 bytesize = "1"
 systemstat = "0.1.5"
-tempfile = "3"
 
 [dependencies.cron-wrapper]
 path = "../cron-wrapper"

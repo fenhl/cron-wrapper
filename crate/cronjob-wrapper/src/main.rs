@@ -14,7 +14,10 @@ use {
             prelude::*,
         },
         path::Path,
-        process::Command,
+        process::{
+            Command,
+            Stdio,
+        },
     },
     bytesize::ByteSize,
     derive_more::From,
@@ -65,32 +68,31 @@ struct Args {
 
 #[wheel::main]
 fn main(args: Args) -> Result<(), Error> {
-    let perm_path = Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", args.name));
+    let err_path = Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", args.name));
     if !args.no_diskspace_check {
         //TODO move part of diskspace to a library crate and use that instead
         let fs = System::new().mount_at("/")?;
         if fs.avail < ByteSize::gib(5) || (fs.avail.as_u64() as f64 / fs.total.as_u64() as f64) < 0.05
         || fs.files_avail < 5000 || (fs.files_avail as f64 / fs.files_total as f64) < 0.05 {
-            fs::write(perm_path, b"not enough disk space\n")?;
+            fs::write(err_path, b"not enough disk space\n")?;
             return Ok(())
         }
     }
-    let tmp_file = tempfile::Builder::new()
-        .prefix(&format!("cronjob-{}", args.name))
-        .suffix(".log")
-        .tempfile()?;
-    let status = match Command::new(args.cmd).args(args.args).stdout(tmp_file.reopen()?).status() {
-        Ok(status) => status,
+    let output = match Command::new(args.cmd).args(args.args).stdout(Stdio::piped()).stderr(Stdio::piped()).output() {
+        Ok(output) => output,
         Err(e) => {
-            let mut perm_file = File::create(perm_path)?;
-            writeln!(perm_file, "error calling cronjob:\n{}\n{:?}", e, e)?;
+            writeln!(File::create(err_path)?, "error calling cronjob:\n{}\n{:?}", e, e)?;
             return Ok(())
         }
     };
-    if status.success() {
-        fs::remove_file(perm_path).not_found_ok()?;
+    if output.status.success() {
+        fs::remove_file(err_path).not_found_ok()?;
     } else {
-        fs::rename(tmp_file, perm_path)?;
+        let mut err_file = File::create(err_path)?;
+        write!(err_file, "cronjob exited with {}:\n\nstdout:\n", output.status)?;
+        err_file.write_all(&output.stdout)?;
+        write!(err_file, "\nstderr:\n")?;
+        err_file.write_all(&output.stderr)?;
     }
     Ok(())
 }
