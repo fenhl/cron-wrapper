@@ -93,6 +93,7 @@ fn main(args: Args) -> Result<(), Error> {
         err_file.write_all(&output.stdout)?;
         write!(err_file, "\nstderr:\n")?;
         err_file.write_all(&output.stderr)?;
+        err_file.flush()?;
     }
     Ok(())
 }
