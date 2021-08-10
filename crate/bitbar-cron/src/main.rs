@@ -15,12 +15,13 @@ use {
         },
     },
     bitbar::{
+        ContentItem,
         Menu,
         MenuItem,
     },
     derive_more::From,
     itertools::Itertools as _,
-    lazy_static::lazy_static,
+    once_cell::sync::Lazy,
     regex::Regex,
     serde::Deserialize,
     cron_wrapper::{
@@ -29,9 +30,7 @@ use {
     },
 };
 
-lazy_static! {
-    static ref ERROR_LOG_REGEX: Regex = Regex::new("^cronjob-(.+)\\.log$").expect("failed to build error log filename regex");
-}
+static ERROR_LOG_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^cronjob-(.+)\\.log$").expect("failed to build error log filename regex"));
 
 #[derive(From)]
 enum Error {
@@ -120,11 +119,19 @@ fn main() -> Result<Menu, Error> {
             MenuItem::new(format!("cron: {}", total)), //TODO replace “cron” text with a template-image
             MenuItem::Sep,
         ];
+        #[allow(unstable_name_collisions)] //TODO use std impl of intersperse_with when stabilized
         menu.extend(host_groups.into_iter()
-            .filter_map(|(host, mut failed_cronjobs)| (!failed_cronjobs.is_empty()).then(|| {
+            .filter_map(|(host, mut failed_cronjobs)| (!failed_cronjobs.is_empty()).then(move || {
                 failed_cronjobs.sort();
-                Box::new(iter::once(MenuItem::new(host))
-                    .chain(failed_cronjobs.into_iter().map(MenuItem::new))) as Box<dyn Iterator<Item = MenuItem>>
+                Box::new(iter::once(MenuItem::new(&host))
+                    .chain(failed_cronjobs.into_iter().map(move |cronjob| {
+                        let item = ContentItem::new(&cronjob);
+                        if host == "localhost" {
+                            item.command(("open", Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", cronjob)).display()))
+                        } else {
+                            item.command(bitbar::Command::terminal(("dev", &host, "run", "cat", Path::new(ERRORS_DIR_LINUX).join(format!("cronjob-{}.log", cronjob)).display())))
+                        }.into()
+                    }))) as Box<dyn Iterator<Item = MenuItem>>
             }))
             .intersperse_with(|| Box::new(iter::once(MenuItem::Sep)))
             .flatten());
