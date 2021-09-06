@@ -3,6 +3,7 @@
 
 use {
     std::{
+        convert::Infallible as Never,
         ffi::OsString,
         fs::File,
         io,
@@ -16,6 +17,7 @@ use {
     },
     bitbar::{
         ContentItem,
+        Flavor,
         Menu,
         MenuItem,
     },
@@ -31,6 +33,23 @@ use {
 };
 
 static ERROR_LOG_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^cronjob-(.+)\\.log$").expect("failed to build error log filename regex"));
+
+trait ResultNeverExt {
+    type Ok;
+
+    fn never_unwrap(self) -> Self::Ok;
+}
+
+impl<T> ResultNeverExt for Result<T, Never> {
+    type Ok = T;
+
+    fn never_unwrap(self) -> T {
+        match self {
+            Ok(x) => x,
+            Err(never) => match never {},
+        }
+    }
+}
 
 #[derive(From)]
 enum Error {
@@ -101,7 +120,7 @@ fn failed_cronjobs_ssh(host: &str) -> Result<Vec<String>, Error> {
 }
 
 #[bitbar::main] //TODO error-template-image
-fn main() -> Result<Menu, Error> {
+fn main(flavor: Flavor) -> Result<Menu, Error> {
     let config = Config::new()?;
     let host_groups = iter::once(Ok::<_, Error>((format!("localhost"), failed_cronjobs_local()?)))
         .chain(config.hosts.into_iter().map(|host| {
@@ -115,10 +134,14 @@ fn main() -> Result<Menu, Error> {
     Ok(if total == 0 {
         Menu::default()
     } else {
-        let mut menu = vec![
-            MenuItem::new(format!("cron: {}", total)), //TODO replace “cron” text with a template-image
-            MenuItem::Sep,
-        ];
+        let header = if let Flavor::SwiftBar(swiftbar) = flavor {
+            let mut header = ContentItem::new(total);
+            swiftbar.sf_image(&mut header, "calendar.badge.clock");
+            header.into()
+        } else {
+            MenuItem::new(format!("cron: {}", total))
+        };
+        let mut menu = vec![header, MenuItem::Sep];
         #[allow(unstable_name_collisions)] //TODO use std impl of intersperse_with when stabilized
         menu.extend(host_groups.into_iter()
             .filter_map(|(host, mut failed_cronjobs)| (!failed_cronjobs.is_empty()).then(move || {
@@ -129,8 +152,8 @@ fn main() -> Result<Menu, Error> {
                         if host == "localhost" {
                             item.command(("open", Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", cronjob)).display()))
                         } else {
-                            item.command(bitbar::Command::terminal(("dev", &host, "run", "cat", Path::new(ERRORS_DIR_LINUX).join(format!("cronjob-{}.log", cronjob)).display())))
-                        }.into()
+                            item.command(bitbar::attr::Command::terminal(("dev", &host, "run", "cat", Path::new(ERRORS_DIR_LINUX).join(format!("cronjob-{}.log", cronjob)).display())))
+                        }.never_unwrap().into()
                     }))) as Box<dyn Iterator<Item = MenuItem>>
             }))
             .intersperse_with(|| Box::new(iter::once(MenuItem::Sep)))
