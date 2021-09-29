@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 bytesize = "1"
+chrono = "0.4"
 systemstat = "0.1.5"
 
 [dependencies.cron-wrapper]

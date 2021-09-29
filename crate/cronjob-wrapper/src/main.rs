@@ -20,6 +20,7 @@ use {
         },
     },
     bytesize::ByteSize,
+    chrono::prelude::*,
     derive_more::From,
     structopt::StructOpt,
     systemstat::{
@@ -74,14 +75,14 @@ fn main(args: Args) -> Result<(), Error> {
         let fs = System::new().mount_at("/")?;
         if fs.avail < ByteSize::gib(5) || (fs.avail.as_u64() as f64 / fs.total.as_u64() as f64) < 0.05
         || fs.files_avail < 5000 || (fs.files_avail as f64 / fs.files_total as f64) < 0.05 {
-            fs::write(err_path, b"not enough disk space\n")?;
+            writeln!(File::create(err_path)?, "{}\nnot enough disk space", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"))?;
             return Ok(())
         }
     }
     let output = match Command::new(args.cmd).args(args.args).stdout(Stdio::piped()).stderr(Stdio::piped()).output() {
         Ok(output) => output,
         Err(e) => {
-            writeln!(File::create(err_path)?, "error calling cronjob:\n{}\n{:?}", e, e)?;
+            writeln!(File::create(err_path)?, "{}\nerror calling cronjob:\n{}\n{:?}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), e, e)?;
             return Ok(())
         }
     };
@@ -89,7 +90,7 @@ fn main(args: Args) -> Result<(), Error> {
         fs::remove_file(err_path).not_found_ok()?;
     } else {
         let mut err_file = File::create(err_path)?;
-        write!(err_file, "cronjob exited with {}:\n\nstdout:\n", output.status)?;
+        write!(err_file, "{}\ncronjob exited with {}:\n\nstdout:\n", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), output.status)?;
         err_file.write_all(&output.stdout)?;
         write!(err_file, "\nstderr:\n")?;
         err_file.write_all(&output.stderr)?;
