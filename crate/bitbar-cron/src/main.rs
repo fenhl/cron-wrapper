@@ -152,7 +152,7 @@ fn main(flavor: Flavor) -> Result<Menu, Error> {
                         if host == "localhost" {
                             item.command(("open", Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", cronjob)).display()))
                         } else {
-                            item.command(bitbar::attr::Command::terminal(("dev", &host, "run", "cat", Path::new(ERRORS_DIR_LINUX).join(format!("cronjob-{}.log", cronjob)).display())))
+                            item.command(bitbar::attr::Command::terminal(("ssh", &host, "cat", Path::new(ERRORS_DIR_LINUX).join(format!("cronjob-{}.log", cronjob)).display())))
                         }.never_unwrap().into()
                     }))) as Box<dyn Iterator<Item = MenuItem>>
             }))
