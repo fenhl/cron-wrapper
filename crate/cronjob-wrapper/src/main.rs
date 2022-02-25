@@ -22,7 +22,6 @@ use {
     bytesize::ByteSize,
     chrono::prelude::*,
     derive_more::From,
-    structopt::StructOpt,
     systemstat::{
         Platform as _,
         System,
@@ -56,14 +55,14 @@ impl fmt::Display for Error {
     }
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Parser)]
 struct Args {
     name: String,
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     cmd: OsString,
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     args: Vec<OsString>,
-    #[structopt(long)]
+    #[clap(long)]
     no_diskspace_check: bool,
 }
 

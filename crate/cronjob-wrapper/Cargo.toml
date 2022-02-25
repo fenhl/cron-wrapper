@@ -9,6 +9,10 @@ bytesize = "1"
 chrono = "0.4"
 systemstat = "0.1.5"
 
+[dependencies.clap]
+version = "3"
+features = ["derive"]
+
 [dependencies.cron-wrapper]
 path = "../cron-wrapper"
 
@@ -16,10 +20,6 @@ path = "../cron-wrapper"
 version = "0.99"
 default-features = false
 features = ["from"]
-
-[dependencies.structopt]
-version = "0.3"
-features = ["paw"]
 
 [dependencies.wheel]
 git = "https://github.com/fenhl/wheel"
