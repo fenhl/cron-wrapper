@@ -1,5 +1,5 @@
 [package]
 name = "cron-wrapper"
-version = "2.1.0"
-authors = ["Fenhl <fenhl@fenhl.net>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true

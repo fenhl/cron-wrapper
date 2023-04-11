@@ -58,9 +58,7 @@ impl fmt::Display for Error {
 #[derive(clap::Parser)]
 struct Args {
     name: String,
-    #[clap(parse(from_os_str))]
     cmd: OsString,
-    #[clap(parse(from_os_str))]
     args: Vec<OsString>,
     #[clap(long)]
     no_diskspace_check: bool,

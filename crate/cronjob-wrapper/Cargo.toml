@@ -1,16 +1,16 @@
 [package]
 name = "cronjob-wrapper"
-version = "2.1.0"
-authors = ["Fenhl <fenhl@fenhl.net>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 bytesize = "1"
 chrono = "0.4"
-systemstat = "0.1.5"
+systemstat = "0.2"
 
 [dependencies.clap]
-version = "3"
+version = "4"
 features = ["derive"]
 
 [dependencies.cron-wrapper]
