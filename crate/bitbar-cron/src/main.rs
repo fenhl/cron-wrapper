@@ -1,19 +1,10 @@
-#![deny(rust_2018_idioms, unused, unused_crate_dependencies, unused_import_braces, unused_lifetimes, unused_qualifications, warnings)]
-#![forbid(unsafe_code)]
-
 use {
     std::{
         convert::Infallible as Never,
         ffi::OsString,
-        fs::File,
-        io,
         iter,
         path::Path,
-        process::{
-            Command,
-            Output,
-            Stdio,
-        },
+        process::Stdio,
     },
     bitbar::{
         ContentItem,
@@ -21,18 +12,25 @@ use {
         Menu,
         MenuItem,
     },
-    derive_more::From,
+    futures::stream::{
+        self,
+        StreamExt as _,
+        TryStreamExt as _,
+    },
+    if_chain::if_chain,
     itertools::Itertools as _,
-    once_cell::sync::Lazy,
-    regex::Regex,
+    lazy_regex::regex_captures,
     serde::Deserialize,
+    tokio::process::Command,
+    wheel::{
+        fs,
+        traits::AsyncCommandOutputExt as _,
+    },
     cron_wrapper::{
         ERRORS_DIR,
         ERRORS_DIR_LINUX,
     },
 };
-
-static ERROR_LOG_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^cronjob-(.+)\\.log$").expect("failed to build error log filename regex"));
 
 trait ResultNeverExt {
     type Ok;
@@ -51,26 +49,31 @@ impl<T> ResultNeverExt for Result<T, Never> {
     }
 }
 
-#[derive(From)]
+#[derive(Debug, thiserror::Error)]
 enum Error {
-    CommandExit(Output),
-    ConfigFormat(serde_json::Error),
-    Io(io::Error),
+    #[error(transparent)] Json(#[from] serde_json::Error),
+    #[error(transparent)] Utf8(#[from] std::string::FromUtf8Error),
+    #[error(transparent)] Wheel(#[from] wheel::Error),
+    #[error(transparent)] Xdg(#[from] xdg::BaseDirectoriesError),
+    #[error("invalid UTF-8")]
     OsString(OsString),
-    Utf8(std::string::FromUtf8Error),
+}
+
+impl From<OsString> for Error {
+    fn from(s: OsString) -> Self {
+        Self::OsString(s)
+    }
 }
 
 impl From<Error> for Menu {
     fn from(e: Error) -> Menu {
         match e {
-            Error::CommandExit(output) => Menu(vec![
-                MenuItem::new(format!("subcommand exited with {}", output.status)),
+            Error::Wheel(wheel::Error::CommandExit { name, output }) => Menu(vec![
+                MenuItem::new(format!("subcommand {name} exited with {}", output.status)),
                 MenuItem::new(format!("stdout: {}", String::from_utf8_lossy(&output.stdout))),
                 MenuItem::new(format!("stderr: {}", String::from_utf8_lossy(&output.stderr))),
             ]),
-            Error::ConfigFormat(e) => Menu(vec![MenuItem::new(format!("error reading config file: {}", e))]),
-            Error::Io(e) => Menu(vec![MenuItem::new(format!("I/O error: {}", e))]),
-            Error::OsString(_) | Error::Utf8(_) => Menu(vec![MenuItem::new("filename was not valid UTF-8")]),
+            e => Menu(vec![MenuItem::new(e)]),
         }
     }
 }
@@ -82,19 +85,23 @@ struct Config {
 }
 
 impl Config {
-    fn new() -> Result<Config, Error> {
-        let dirs = xdg_basedir::get_config_home().into_iter().chain(xdg_basedir::get_config_dirs());
-        Ok(if let Some(file) = dirs.filter_map(|cfg_dir| File::open(cfg_dir.join("bitbar/plugins/cron.json")).ok()).next() {
-            serde_json::from_reader(file).map_err(Error::ConfigFormat)?
-        } else {
-            Config::default()
+    async fn load() -> Result<Self, Error> {
+        let path = xdg::BaseDirectories::new()?.find_config_file("bitbar/plugins/cron.json");
+        Ok(if_chain! {
+            if let Some(path) = path;
+            if fs::exists(&path).await?; //TODO replace with fs::read_json NotFound error handling
+            then {
+                fs::read_json(path).await?
+            } else {
+                Self::default()
+            }
         })
     }
 }
 
-fn failed_cronjobs_local() -> Result<Vec<String>, Error> {
-    Path::new(ERRORS_DIR).read_dir()?
-        .filter_map(|entry| {
+async fn failed_cronjobs_local() -> Result<Vec<String>, Error> {
+    fs::read_dir(ERRORS_DIR)
+        .filter_map(|entry| async {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(e) => return Some(Err(e.into())),
@@ -103,31 +110,30 @@ fn failed_cronjobs_local() -> Result<Vec<String>, Error> {
                 Ok(file_name) => file_name,
                 Err(raw_file_name) => return Some(Err(raw_file_name.into())),
             };
-            ERROR_LOG_REGEX.captures(&file_name).map(|captures| Ok(captures[1].to_owned()))
+            regex_captures!("^cronjob-(.+)\\.log$", &file_name).map(|(_, name)| Ok(name.to_owned()))
         })
-        .try_collect()
+        .try_collect().await
 }
 
-fn failed_cronjobs_ssh(host: &str) -> Result<Vec<String>, Error> {
-    let output = Command::new("ssh").arg(host).arg("ls").arg(ERRORS_DIR_LINUX).stdout(Stdio::piped()).output()?;
-    if !output.status.success() { return Err(Error::CommandExit(output)) }
+async fn failed_cronjobs_ssh(host: &str) -> Result<Vec<String>, Error> {
+    let output = Command::new("ssh").arg(host).arg("ls").arg(ERRORS_DIR_LINUX).stdout(Stdio::piped()).check("ssh").await?;
     Ok(
         String::from_utf8(output.stdout)?
             .lines()
-            .filter_map(|file_name| ERROR_LOG_REGEX.captures(file_name).map(|captures| captures[1].to_owned()))
+            .filter_map(|file_name| regex_captures!("^cronjob-(.+)\\.log$", file_name).map(|(_, name)| name.to_owned()))
             .collect()
     )
 }
 
 #[bitbar::main] //TODO error-template-image
-fn main(flavor: Flavor) -> Result<Menu, Error> {
-    let config = Config::new()?;
-    let host_groups = iter::once(Ok::<_, Error>((format!("localhost"), failed_cronjobs_local()?)))
-        .chain(config.hosts.into_iter().map(|host| {
-            let failed_cronjobs = failed_cronjobs_ssh(&host)?;
+async fn main(flavor: Flavor) -> Result<Menu, Error> {
+    let config = Config::load().await?;
+    let host_groups = stream::once(async { Ok::<_, Error>((format!("localhost"), failed_cronjobs_local().await?)) })
+        .chain(stream::iter(config.hosts).then(|host| async {
+            let failed_cronjobs = failed_cronjobs_ssh(&host).await?;
             Ok((host, failed_cronjobs))
         }))
-        .try_collect::<_, Vec<_>, _>()?;
+        .try_collect::<Vec<_>>().await?;
     let total = host_groups.iter()
         .map(|(_, failed_cronjobs)| failed_cronjobs.len())
         .sum::<usize>();

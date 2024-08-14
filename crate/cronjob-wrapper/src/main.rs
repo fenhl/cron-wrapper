@@ -4,7 +4,6 @@
 use {
     std::{
         ffi::OsString,
-        fmt,
         fs::{
             self,
             File,
@@ -21,7 +20,6 @@ use {
     },
     bytesize::ByteSize,
     chrono::prelude::*,
-    derive_more::From,
     systemstat::{
         Platform as _,
         System,
@@ -42,17 +40,9 @@ impl IoResultExt for io::Result<()> {
     }
 }
 
-#[derive(From)]
+#[derive(Debug, thiserror::Error)]
 enum Error {
-    Io(io::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Io(e) => write!(f, "I/O error: {}", e),
-        }
-    }
+    #[error(transparent)] Io(#[from] io::Error),
 }
 
 #[derive(clap::Parser)]

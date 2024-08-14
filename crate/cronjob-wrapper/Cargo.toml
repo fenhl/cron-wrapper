@@ -7,20 +7,8 @@ edition.workspace = true
 [dependencies]
 bytesize = "1"
 chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+cron-wrapper = { path = "../cron-wrapper" }
 systemstat = "0.2"
-
-[dependencies.clap]
-version = "4"
-features = ["derive"]
-
-[dependencies.cron-wrapper]
-path = "../cron-wrapper"
-
-[dependencies.derive_more]
-version = "0.99"
-default-features = false
-features = ["from"]
-
-[dependencies.wheel]
-git = "https://github.com/fenhl/wheel"
-branch = "main"
+thiserror = "1.0.63"
+wheel = { git = "https://github.com/fenhl/wheel", branch = "main" }
