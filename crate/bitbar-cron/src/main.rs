@@ -54,7 +54,6 @@ enum Error {
     #[error(transparent)] Json(#[from] serde_json::Error),
     #[error(transparent)] Utf8(#[from] std::string::FromUtf8Error),
     #[error(transparent)] Wheel(#[from] wheel::Error),
-    #[error(transparent)] Xdg(#[from] xdg::BaseDirectoriesError),
     #[error("invalid UTF-8")]
     OsString(OsString),
 }
@@ -86,7 +85,7 @@ struct Config {
 
 impl Config {
     async fn load() -> Result<Self, Error> {
-        let path = xdg::BaseDirectories::new()?.find_config_file("bitbar/plugins/cron.json");
+        let path = xdg::BaseDirectories::new().find_config_file("bitbar/plugins/cron.json");
         Ok(if_chain! {
             if let Some(path) = path;
             if fs::exists(&path).await?; //TODO replace with fs::read_json NotFound error handling

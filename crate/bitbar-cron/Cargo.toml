@@ -15,15 +15,15 @@ unused_qualifications = "deny"
 warnings = "deny"
 
 [dependencies]
-bitbar = "0.9"
+bitbar = "0.10"
 cron-wrapper = { path = "../cron-wrapper" }
 futures = "0.3.30"
 if_chain = "1.0.2"
-itertools = "0.13"
+itertools = "0.14"
 lazy-regex = "3.2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = { package = "serde_json_path_to_error", version = "0.1.4" }
-thiserror = "1.0.63"
+thiserror = "2"
 tokio = { version = "1.39.2", features = ["process"] }
-wheel = { git = "https://github.com/fenhl/wheel", branch = "main", features = ["serde", "serde_json", "serde_json_path_to_error"] }
-xdg = "2.5.2"
+wheel = { git = "https://github.com/fenhl/wheel", branch = "main", features = ["serde_json"] }
+xdg = "3"
