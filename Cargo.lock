@@ -312,6 +312,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1371a7e3b44a0f6172423a30463e3c1165feef13611b13f6b4ffe283d6967145"
 dependencies = [
+ "base64 0.21.7",
  "bitbar-derive",
  "css-color-parser",
  "futures",

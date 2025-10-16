@@ -15,7 +15,7 @@ unused_qualifications = "deny"
 warnings = "deny"
 
 [dependencies]
-bitbar = "0.10"
+bitbar = { version = "0.10", features = ["base64"] }
 cron-wrapper = { path = "../cron-wrapper" }
 futures = "0.3.30"
 if_chain = "1.0.2"

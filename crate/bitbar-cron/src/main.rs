@@ -124,7 +124,7 @@ async fn failed_cronjobs_ssh(host: &str) -> Result<Vec<String>, Error> {
     )
 }
 
-#[bitbar::main] //TODO error-template-image
+#[bitbar::main(error_template_image = "../assets/calendar-badge-clock.png")]
 async fn main(flavor: Flavor) -> Result<Menu, Error> {
     let config = Config::load().await?;
     let host_groups = stream::once(async { Ok::<_, Error>((format!("localhost"), failed_cronjobs_local().await?)) })
