@@ -71,8 +71,13 @@ impl From<Error> for Menu {
                 MenuItem::new(format!("subcommand {name} exited with {}", output.status)),
                 MenuItem::new(format!("stdout: {}", String::from_utf8_lossy(&output.stdout))),
                 MenuItem::new(format!("stderr: {}", String::from_utf8_lossy(&output.stderr))),
+                ContentItem::new("Refresh").refresh().into(),
             ]),
-            e => Menu(vec![MenuItem::new(e)]),
+            e => Menu(vec![
+                MenuItem::new(&e),
+                MenuItem::new(format!("{e:?}")),
+                ContentItem::new("Refresh").refresh().into(),
+            ]),
         }
     }
 }
