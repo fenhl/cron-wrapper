@@ -4,19 +4,8 @@
 use {
     std::{
         ffi::OsString,
-        fs::{
-            self,
-            File,
-        },
-        io::{
-            self,
-            prelude::*,
-        },
         path::Path,
-        process::{
-            Command,
-            Stdio,
-        },
+        process::Stdio,
     },
     bytesize::ByteSize,
     chrono::prelude::*,
@@ -24,28 +13,22 @@ use {
         Platform as _,
         System,
     },
+    tokio::{
+        io::AsyncWriteExt as _,
+        process::Command,
+    },
+    wheel::{
+        fs::{
+            self,
+            File,
+        },
+        traits::IoResultExt as _,
+    },
     cron_wrapper::ERRORS_DIR,
 };
 
-trait IoResultExt {
-    fn not_found_ok(self) -> Self;
-}
-
-impl IoResultExt for io::Result<()> {
-    fn not_found_ok(self) -> Self {
-        match self {
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-            x => x,
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-enum Error {
-    #[error(transparent)] Io(#[from] io::Error),
-}
-
 #[derive(clap::Parser)]
+#[clap(version)]
 struct Args {
     name: String,
     cmd: OsString,
@@ -55,33 +38,35 @@ struct Args {
 }
 
 #[wheel::main]
-fn main(args: Args) -> Result<(), Error> {
+async fn main(args: Args) -> wheel::Result {
     let err_path = Path::new(ERRORS_DIR).join(format!("cronjob-{}.log", args.name));
     if !args.no_diskspace_check {
         //TODO move part of diskspace to a library crate and use that instead
-        let fs = System::new().mount_at("/")?;
+        let fs = System::new().mount_at("/").at("/")?;
         if fs.avail < ByteSize::gib(5) || (fs.avail.as_u64() as f64 / fs.total.as_u64() as f64) < 0.05
         || fs.files_avail < 5000 || (fs.files_avail as f64 / fs.files_total as f64) < 0.05 {
-            writeln!(File::create(err_path)?, "{}\nnot enough disk space", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"))?;
+            let mut err_file = File::create(&err_path).await?;
+            err_file.write_all(format!("{}\nnot enough disk space\n", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")).as_ref()).await.at(err_path)?;
             return Ok(())
         }
     }
-    let output = match Command::new(args.cmd).args(args.args).stdout(Stdio::piped()).stderr(Stdio::piped()).output() {
+    let output = match Command::new(args.cmd).args(args.args).stdout(Stdio::piped()).stderr(Stdio::piped()).output().await {
         Ok(output) => output,
         Err(e) => {
-            writeln!(File::create(err_path)?, "{}\nerror calling cronjob:\n{}\n{:?}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), e, e)?;
+            let mut err_file = File::create(&err_path).await?;
+            err_file.write_all(format!("{}\nerror calling cronjob:\n{}\n{:?}\n", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), e, e).as_ref()).await.at(err_path)?;
             return Ok(())
         }
     };
     if output.status.success() {
-        fs::remove_file(err_path).not_found_ok()?;
+        fs::remove_file(err_path).await.missing_ok()?;
     } else {
-        let mut err_file = File::create(err_path)?;
-        write!(err_file, "{}\ncronjob exited with {}:\n\nstdout:\n", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), output.status)?;
-        err_file.write_all(&output.stdout)?;
-        write!(err_file, "\nstderr:\n")?;
-        err_file.write_all(&output.stderr)?;
-        err_file.flush()?;
+        let mut err_file = File::create(&err_path).await?;
+        err_file.write_all(format!("{}\ncronjob exited with {}:\n\nstdout:\n", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), output.status).as_ref()).await.at(&err_path)?;
+        err_file.write_all(&output.stdout).await.at(&err_path)?;
+        err_file.write_all(b"\nstderr:\n").await.at(&err_path)?;
+        err_file.write_all(&output.stderr).await.at(&err_path)?;
+        err_file.flush().await.at(err_path)?;
     }
     Ok(())
 }
