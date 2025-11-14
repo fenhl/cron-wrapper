@@ -4,7 +4,7 @@ default-members = ["crate/cronjob-wrapper"]
 resolver = "2"
 
 [workspace.package]
-version = "2.1.4"
+version = "2.1.5"
 authors = ["Fenhl <fenhl@fenhl.net>"]
 edition = "2024"
 
@@ -12,3 +12,6 @@ edition = "2024"
 codegen-units = 1
 lto = true
 strip = true
+
+[patch.crates-io]
+mac-notification-sys = { git = "https://github.com/h4llow3En/mac-notification-sys" } # https://github.com/h4llow3En/mac-notification-sys/issues/79#issuecomment-3500005878

@@ -327,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "bitbar-cron"
-version = "2.1.4"
+version = "2.1.5"
 dependencies = [
  "bitbar",
  "cron-wrapper",
@@ -554,11 +554,11 @@ dependencies = [
 
 [[package]]
 name = "cron-wrapper"
-version = "2.1.4"
+version = "2.1.5"
 
 [[package]]
 name = "cronjob-wrapper"
-version = "2.1.4"
+version = "2.1.5"
 dependencies = [
  "bytesize",
  "chrono",
@@ -3063,3 +3063,8 @@ dependencies = [
  "syn",
  "winnow",
 ]
+
+[[patch.unused]]
+name = "mac-notification-sys"
+version = "0.6.8"
+source = "git+https://github.com/h4llow3En/mac-notification-sys#7798ad033f3422b0fc9cdd25c17d3c400f4b7ef0"
